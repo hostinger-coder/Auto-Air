@@ -58,6 +58,8 @@ class _AuthGateState extends State<AuthGate> {
 
 // ===== lib/main.dart =====
 
+// ===== lib/main.dart =====
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'features/authentication/screens/signup_screen.dart';
@@ -73,6 +75,7 @@ import 'features/setup/screens/wifi_password_screen.dart';
 import 'features/dashboard/screens/relay_schedule_screen.dart';
 import 'features/dashboard/screens/hourly_records_screen.dart';
 import 'features/dashboard/screens/firmware_update_screen.dart';
+import 'features/dashboard/screens/configuration_screen.dart';
 import 'providers/dashboard_provider.dart';
 import 'providers/device_provider.dart';
 import 'themes.dart';
@@ -124,6 +127,7 @@ class MyApp extends StatelessWidget {
         '/relay_schedule': (context) => const RelayScheduleScreen(),
         '/hourly_records': (context) => const HourlyRecordsScreen(),
         '/firmware_update': (context) => const FirmwareUpdateScreen(),
+        '/configuration': (context) => const ConfigurationScreen(),
       },
     );
   }
@@ -1495,6 +1499,56 @@ class RelaySchedule {
   });
 }
 
+// ===== lib/features/dashboard/screens/configuration_screen.dart =====
+
+import 'package:flutter/material.dart';
+import 'package:AutoAir/widgets/app_background.dart';
+import 'package:AutoAir/features/dashboard/widgets/date_time_tab.dart';
+import 'package:AutoAir/features/dashboard/widgets/wifi_setup_tab.dart';
+
+class ConfigurationScreen extends StatelessWidget {
+  const ConfigurationScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBackground(
+      child: DefaultTabController(
+        length: 2,
+        initialIndex: 1,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: true,
+            title: const Text('Configuration'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            bottom: TabBar(
+              indicatorColor: Theme.of(context).colorScheme.primary,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              unselectedLabelColor: Colors.white54,
+              tabs: const [
+                Tab(text: 'Wi-Fi Setup'),
+                Tab(text: 'Date & Time'),
+              ],
+            ),
+          ),
+          body: const TabBarView(
+            children: [
+              WifiSetupTab(),
+              DateTimeTab(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ===== lib/features/dashboard/screens/dashboard_screen.dart =====
 
 import 'dart:async';
@@ -1512,6 +1566,7 @@ import 'package:AutoAir/providers/dashboard_provider.dart';
 import 'package:AutoAir/themes/custom_colors.dart';
 import 'package:AutoAir/widgets/app_background.dart';
 import 'package:AutoAir/features/dashboard/widgets/fan_control_settings_tab.dart';
+import 'package:AutoAir/features/dashboard/widgets/side_menu.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -1524,6 +1579,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedActionIndex = 0;
   late PageController _pageController;
   int _currentPage = 0;
+  bool _isSideMenuOpen = false;
+
+  void _toggleSideMenu() {
+    setState(() {
+      _isSideMenuOpen = !_isSideMenuOpen;
+    });
+  }
 
   @override
   void initState() {
@@ -1539,32 +1601,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final menuWidth = MediaQuery.of(context).size.width * 0.75;
+
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: _buildCustomAppBar(context),
-        body: SafeArea(
-          bottom: true,
-          child: Consumer<DashboardProvider>(
-            builder: (context, provider, _) {
-              if (provider.isLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (provider.error != null) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Text(
-                      provider.error!,
-                      style: const TextStyle(color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                );
-              }
-              return _buildDashboardContent(context, provider);
-            },
-          ),
+        body: Stack(
+          children: [
+            SafeArea(
+              bottom: true,
+              child: Consumer<DashboardProvider>(
+                builder: (context, provider, _) {
+                  if (provider.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (provider.error != null) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Text(
+                          provider.error!,
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  return _buildDashboardContent(context, provider);
+                },
+              ),
+            ),
+            if (_isSideMenuOpen)
+              GestureDetector(
+                onTap: _toggleSideMenu,
+                child: Container(
+                  color: Colors.black.withOpacity(0.5),
+                ),
+              ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              top: 0,
+              bottom: 0,
+              right: _isSideMenuOpen ? 0 : -menuWidth,
+              width: menuWidth,
+              child: const SideMenu(),
+            ),
+          ],
         ),
       ),
     );
@@ -1576,15 +1660,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       elevation: 0,
       automaticallyImplyLeading: false,
       title: const _StatusHeader(),
-      actions: const [
-        Padding(
-          padding: EdgeInsets.only(right: 10),
-          child: CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.white24,
-            child: Icon(Icons.person, size: 18, color: Colors.white),
-          ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.menu, color: Colors.white, size: 28),
+          onPressed: _toggleSideMenu,
         ),
+        const SizedBox(width: 10),
       ],
     );
   }
@@ -1603,7 +1684,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     const SizedBox(height: 24),
                     Text(
-                      'Power Monitor',
+                      provider.selectedDevice?.name ?? 'Power Monitor',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -1742,8 +1823,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onTap: () {
         if (index == 2) {
           Navigator.pushNamed(context, '/hourly_records');
-        } else if (index == 4) {
+        } else if (index == 3) {
           Navigator.pushNamed(context, '/firmware_update');
+        } else if (index == 4) {
+          Navigator.pushNamed(context, '/configuration');
         } else {
           setState(() => _selectedActionIndex = index);
         }
@@ -1754,23 +1837,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         height: 55,
         decoration: BoxDecoration(
           color: isSelected ? theme.colorScheme.primary : const Color(0xFF2C2C2E),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Center(
-          child: Container(
-            width: 35,
-            height: 35,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2.0),
-            ),
-            child: Center(
-              child: FaIcon(
-                icon,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
+          child: FaIcon(
+            icon,
+            color: Colors.white,
+            size: 22,
           ),
         ),
       ),
@@ -2486,8 +2559,8 @@ class _PrimaryButton extends StatelessWidget {
 // ===== lib/features/dashboard/screens/firmware_update_screen.dart =====
 
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:dotted_border/dotted_border.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:AutoAir/widgets/app_background.dart';
 
@@ -2516,9 +2589,28 @@ class _FirmwareAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
-      title: Text(
-        'Firmware Update',
-        style: TextStyle(color: isDark ? Colors.white : Colors.black),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.system_update, size: 16, color: Theme.of(context).colorScheme.primary),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Firmware Update',
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
       leading: IconButton(
         icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
@@ -2551,11 +2643,10 @@ class _FirmwareUpdateBodyState extends State<_FirmwareUpdateBody> {
   }
 
   Future<void> _pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['bin'],
+      allowedExtensions: const ['bin'],
     );
-
     if (result != null) {
       setState(() {
         _fileName = result.files.single.name;
@@ -2578,170 +2669,323 @@ class _FirmwareUpdateBodyState extends State<_FirmwareUpdateBody> {
           _uploadProgress = 1.0;
           _isUploading = false;
           timer.cancel();
+          _showCompletionDialog();
         }
       });
     });
   }
 
+  void _showCompletionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext ctx) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF1C1C1E).withOpacity(0.9),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            title: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.lightGreenAccent),
+                const SizedBox(width: 8),
+                const Text('Update Complete', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text('Your device will restart automatically.'),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.grey.shade800,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Done'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return SingleChildScrollView(
+    return ListView(
       padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _CurrentVersionCard(),
-          const SizedBox(height: 24),
-          const _WarningCard(),
-          const SizedBox(height: 24),
-          Text(
-            'Select Firmware File (.bin)',
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
+      children: [
+        _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: const [
+              _SectionTitle(icon: Icons.info_outline, title: 'Current Version'),
+              SizedBox(height: 12),
+              _CurrentVersionRows(),
+            ],
           ),
-          const SizedBox(height: 16),
-          _FilePickerBox(
-            fileName: _fileName,
-            onChooseFile: _pickFile,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Note: Use the main .bin file (e.g., AAI_ESP32ino.bin), not the bootload or partition files.',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          _buildUploadButton(),
-          if (_isUploading)
-            const Padding(
-              padding: EdgeInsets.only(top: 8.0),
-              child: Text(
-                'Please do not close your browser window while uploading.',
+        ),
+        const SizedBox(height: 16),
+        _GlassCard(
+          gradientBorder: true,
+          child: const _WarningCard(),
+        ),
+        const SizedBox(height: 16),
+        _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _SectionTitle(icon: Icons.file_present, title: 'Select Firmware File (.bin)'),
+              const SizedBox(height: 12),
+              _FilePickerBox(fileName: _fileName, onChooseFile: _pickFile),
+              const SizedBox(height: 8),
+              const Text(
+                'Use the main .bin file (e.g., AAI_ESP32ino.bin), not bootloader or partition files.',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
-            ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: _isUploading ? null : () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+              const SizedBox(height: 16),
+              if (_fileName != null)
+                _FileMeta(name: _fileName!, onClear: () => setState(() => _fileName = null)),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 16),
+        _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _SectionTitle(icon: Icons.upload, title: 'Upload'),
+              const SizedBox(height: 12),
+              _buildUploadButton(theme),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: _isUploading
+                    ? Padding(
+                  key: const ValueKey('uploading_hint'),
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Please do not close the app while uploading.',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+                    : const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: _isUploading ? null : () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildUploadButton() {
-    final theme = Theme.of(context);
+  Widget _buildUploadButton(ThemeData theme) {
     final isComplete = _uploadProgress >= 1.0;
     final isDisabled = _fileName == null || isComplete;
 
     String buttonText;
+    IconData leading;
     if (isComplete) {
       buttonText = 'Uploaded (100%)';
+      leading = Icons.check_rounded;
     } else if (_isUploading) {
-      buttonText = 'Uploading Firmware... (${(_uploadProgress * 100).toInt()}%)';
+      buttonText = 'Uploading…  ${(_uploadProgress * 100).toInt()}%';
+      leading = Icons.sync_rounded;
     } else {
       buttonText = 'Upload Firmware';
+      leading = Icons.cloud_upload_rounded;
     }
 
-    return ElevatedButton(
-      onPressed: isDisabled ? null : _startUpload,
-      style: ElevatedButton.styleFrom(
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ).copyWith(
-        backgroundColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) {
-            if (states.contains(MaterialState.disabled)) {
-              return isComplete ? theme.colorScheme.primary : Colors.grey.shade800;
-            }
-            return theme.colorScheme.primary;
-          },
-        ),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (_isUploading)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: LinearProgressIndicator(
-                value: _uploadProgress,
-                backgroundColor: theme.colorScheme.primary.withOpacity(0.3),
-                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+    return Stack(
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: theme.colorScheme.primary.withOpacity(0.2),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: _isUploading ? _uploadProgress.clamp(0.0, 1.0) : 0.0,
+              child: Container(
+                color: theme.colorScheme.primary.withOpacity(0.65),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Text(buttonText),
           ),
-        ],
+        ),
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: isDisabled ? null : _startUpload,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent, // progress layer sets color
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size.fromHeight(48),
+            ),
+            icon: Icon(leading, color: Colors.white),
+            label: Text(buttonText),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  const _GlassCard({required this.child, this.gradientBorder = false});
+  final Widget child;
+  final bool gradientBorder;
+
+  @override
+  Widget build(BuildContext context) {
+    final border = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: gradientBorder ? Colors.white.withOpacity(0.0) : Colors.white.withOpacity(0.10),
+          width: 1.0,
+        ),
+        gradient: gradientBorder
+            ? LinearGradient(
+          colors: [
+            Colors.amber.withOpacity(0.35),
+            Colors.orange.withOpacity(0.20),
+            Colors.pink.withOpacity(0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        )
+            : null,
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E).withOpacity(0.45),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Stack(
+            children: [
+              // border layer
+              Positioned.fill(child: IgnorePointer(child: border)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: child,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _CurrentVersionCard extends StatelessWidget {
-  const _CurrentVersionCard();
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.icon, required this.title});
+  final IconData icon;
+  final String title;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E).withOpacity(0.6),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Current Version',
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.08),
+            shape: BoxShape.circle,
           ),
-          const SizedBox(height: 12),
-          _buildInfoRow('Version:', '20.0.1 - Enhanced'),
-          _buildInfoRow('Build:', 'Build-008'),
-          _buildInfoRow('Build Date:', 'Jul 31 2025'),
+          child: Icon(icon, size: 16, color: Colors.white),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CurrentVersionRows extends StatelessWidget {
+  const _CurrentVersionRows();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget row(String a, String b) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(child: Text(a, style: const TextStyle(color: Colors.white70))),
+          Text(b, style: const TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
     );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white70)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ],
-      ),
+    return Column(
+      children: [
+        row('Version', '20.0.1 – Enhanced'),
+        row('Build', 'Build-008'),
+        row('Build Date', 'Jul 31 2025'),
+      ],
     );
   }
 }
 
 class _WarningCard extends StatelessWidget {
   const _WarningCard();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          colors: [
+            Colors.amber.withOpacity(0.18),
+            Colors.deepOrange.withOpacity(0.12),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.amber.withOpacity(0.35)),
       ),
-      child: const Row(
-        children: [
+      child: Row(
+        children: const [
           Icon(Icons.warning_amber_rounded, color: Colors.amber),
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Warning: Do not power off the device during the update process. The device will restart automatically after a successful update.',
+              'Do not power off the device during the update. It will restart automatically after a successful update.',
               style: TextStyle(color: Colors.white, fontSize: 12),
             ),
           ),
@@ -2758,42 +3002,52 @@ class _FilePickerBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DottedBorder(
+    final hasFile = fileName != null;
+
+    return _CustomDottedBorder(
       color: Colors.white38,
       strokeWidth: 2,
       dashPattern: const <double>[8, 6],
-      borderType: BorderType.RRect,
       radius: const Radius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-        child: Center(
+      child: InkWell(
+        onTap: onChooseFile,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           child: Column(
             children: [
-              if (fileName == null) ...[
-                const Icon(Icons.upload_file, size: 40, color: Colors.white70),
-                const SizedBox(height: 8),
-                const Text(
-                  'Choose a file or drag and drop it here',
-                  style: TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 250),
+                crossFadeState: hasFile ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                firstChild: Column(
+                  children: const [
+                    Icon(Icons.upload_file, size: 40, color: Colors.white70),
+                    SizedBox(height: 10),
+                    Text(
+                      'Choose a file or tap to browse',
+                      style: TextStyle(color: Colors.white70),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-              ] else ...[
-                const Icon(Icons.insert_drive_file, size: 40, color: Colors.white70),
-                const SizedBox(height: 8),
-                Text(
-                  fileName!,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
+                secondChild: Column(
+                  children: [
+                    const Icon(Icons.insert_drive_file, size: 40, color: Colors.white70),
+                    const SizedBox(height: 10),
+                    Text(
+                      fileName ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-              ],
-              const SizedBox(height: 16),
-              ElevatedButton(
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
                 onPressed: onChooseFile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.shade800,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Choose File'),
+                icon: const Icon(Icons.folder_open),
+                label: const Text('Choose File'),
               ),
             ],
           ),
@@ -2802,6 +3056,167 @@ class _FilePickerBox extends StatelessWidget {
     );
   }
 }
+
+/// Tiny chip for the selected file meta + clear
+class _FileMeta extends StatelessWidget {
+  const _FileMeta({required this.name, required this.onClear});
+  final String name;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.insert_drive_file, size: 14, color: Colors.white70),
+            const SizedBox(width: 6),
+            Text(
+              name,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: onClear,
+              child: const Icon(Icons.close, size: 14, color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ----- Custom dotted border (no third-party) -----
+
+class _CustomDottedBorder extends StatelessWidget {
+  final Widget child;
+  final Color color;
+  final double strokeWidth;
+  final List<double> dashPattern;
+  final Radius radius;
+
+  const _CustomDottedBorder({
+    Key? key,
+    required this.child,
+    this.color = Colors.black,
+    this.strokeWidth = 1,
+    this.dashPattern = const <double>[3, 1],
+    this.radius = Radius.zero,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _DottedPainter(
+              color: color,
+              strokeWidth: strokeWidth,
+              dashPattern: dashPattern,
+              radius: radius,
+            ),
+          ),
+        ),
+        // Padding so the stroke won’t clip the child content
+        Padding(
+          padding: EdgeInsets.all(maxRadiusPadding(strokeWidth)),
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  double maxRadiusPadding(double stroke) => stroke / 2;
+}
+
+class _DottedPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final List<double> dashPattern;
+  final Radius radius;
+
+  _DottedPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.dashPattern,
+    required this.radius,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(strokeWidth / 2, strokeWidth / 2, size.width - strokeWidth, size.height - strokeWidth);
+
+    final Path source = Path()
+      ..addRRect(RRect.fromRectAndRadius(rect, radius));
+
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final Path dashed = _dashPath(source, dashArray: _CircularIntervalList<double>(dashPattern));
+
+    canvas.drawPath(dashed, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DottedPainter oldDelegate) {
+    return color != oldDelegate.color ||
+        strokeWidth != oldDelegate.strokeWidth ||
+        radius != oldDelegate.radius ||
+        dashPattern != oldDelegate.dashPattern;
+  }
+
+  Path _dashPath(
+      Path source, {
+        required _CircularIntervalList<double> dashArray,
+      }) {
+    final Path dest = Path();
+    for (final PathMetric metric in source.computeMetrics()) {
+      double distance = 0.0;
+      bool draw = true;
+      while (distance < metric.length) {
+        final double len = dashArray.next;
+        if (draw) {
+          final double next = (distance + len).clamp(0.0, metric.length);
+          dest.addPath(metric.extractPath(distance, next), Offset.zero);
+          distance = next;
+        } else {
+          distance += len;
+        }
+        draw = !draw;
+      }
+    }
+    return dest;
+  }
+}
+
+class _CircularIntervalList<T> {
+  final List<T> _values;
+  int _idx = 0;
+
+  _CircularIntervalList(this._values);
+
+  T get next {
+    if (_values.isEmpty) {
+      throw StateError('dashPattern cannot be empty');
+    }
+    if (_idx >= _values.length) _idx = 0;
+    return _values[_idx++];
+  }
+}
+
 
 // ===== lib/features/dashboard/screens/hourly_records_screen.dart =====
 
@@ -3309,8 +3724,12 @@ class _GlassContainer extends StatelessWidget {
 
 // ===== lib/features/dashboard/screens/relay_schedule_screen.dart =====
 
+// ===== lib/features/dashboard/screens/relay_schedule_screen.dart =====
+
 import 'dart:ui';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:AutoAir/features/dashboard/models/relay_model.dart';
 import 'package:AutoAir/features/dashboard/models/schedule_model.dart';
 import 'package:AutoAir/widgets/app_background.dart';
@@ -3417,60 +3836,8 @@ class _RelayScheduleScreenState extends State<RelayScheduleScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (_) {
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              color: const Color(0xFF1C1C1E).withOpacity(0.8),
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 12,
-                bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    schedule == null ? 'New Schedule' : 'Edit ${schedule.title}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 20),
-                  // Placeholder fields — hook up to your model later
-                  _Field(label: 'Title', initial: schedule?.title ?? ''),
-                  const SizedBox(height: 12),
-                  _Field(label: 'Time Range', initial: schedule?.timeRange ?? '08:00 AM — 06:00 PM'),
-                  const SizedBox(height: 12),
-                  _Field(label: 'Days', initial: schedule?.days ?? 'Mon • Wed • Fri'),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.save),
-                      label: const Text('Save'),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
-              ),
-            ),
-          ),
-        );
+        return _ScheduleEditor(schedule: schedule);
       },
     );
   }
@@ -3690,7 +4057,6 @@ class _ScheduleCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    // Time range
                     Row(
                       children: [
                         const Icon(Icons.schedule, size: 16, color: Colors.white70),
@@ -3707,7 +4073,6 @@ class _ScheduleCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // Days
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -3724,7 +4089,6 @@ class _ScheduleCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    // Actions
                     Row(
                       children: [
                         OutlinedButton.icon(
@@ -3823,23 +4187,435 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.initial});
-  final String label;
-  final String initial;
+class _ScheduleEditor extends StatefulWidget {
+  const _ScheduleEditor({this.schedule});
+  final RelaySchedule? schedule;
+
+  @override
+  State<_ScheduleEditor> createState() => _ScheduleEditorState();
+}
+
+class _ScheduleEditorState extends State<_ScheduleEditor> {
+  late TextEditingController _titleController;
+  int _scheduleTypeIndex = 0; // 0 for Recurring, 1 for One-Time
+  TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _endTime = const TimeOfDay(hour: 18, minute: 0);
+  final Set<String> _selectedDays = {'Mon', 'Wed', 'Fri'};
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.schedule?.title ?? 'New Schedule');
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickTime(BuildContext context, bool isStartTime) async {
+    final initialTime = isStartTime ? _startTime : _endTime;
+    final newTime = await showTimePicker(context: context, initialTime: initialTime);
+    if (newTime != null) {
+      setState(() {
+        if (isStartTime) {
+          _startTime = newTime;
+        } else {
+          _endTime = newTime;
+        }
+      });
+    }
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 16),
+      child: Text(
+        title,
+        style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 14),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: TextEditingController(text: initial),
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: const Color(0xFF2A2A2C),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: Container(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 12,
+          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E).withOpacity(0.85),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  widget.schedule == null ? 'New Schedule' : 'Edit Schedule',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildSectionHeader('Title'),
+              TextField(
+                controller: _titleController,
+                decoration: InputDecoration(hintText: 'e.g., Weekday Operation'),
+              ),
+              _buildSectionHeader('Type'),
+              SizedBox(
+                width: double.infinity,
+                child: CupertinoSlidingSegmentedControl<int>(
+                  groupValue: _scheduleTypeIndex,
+                  backgroundColor: Colors.black26,
+                  thumbColor: Theme.of(context).colorScheme.primary,
+                  padding: const EdgeInsets.all(4),
+                  children: const {
+                    0: Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Recurring')),
+                    1: Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('One-Time')),
+                  },
+                  onValueChanged: (value) => setState(() => _scheduleTypeIndex = value ?? 0),
+                ),
+              ),
+              if (_scheduleTypeIndex == 0) ...[
+                _buildSectionHeader('Days'),
+                _DaySelector(
+                  selectedDays: _selectedDays,
+                  onDaySelected: (day) {
+                    setState(() {
+                      if (_selectedDays.contains(day)) {
+                        _selectedDays.remove(day);
+                      } else {
+                        _selectedDays.add(day);
+                      }
+                    });
+                  },
+                ),
+              ],
+              _buildSectionHeader('Time Range'),
+              Row(
+                children: [
+                  Expanded(child: _TimePickerField(time: _startTime, onTap: () => _pickTime(context, true))),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text('to', style: TextStyle(color: Colors.white70)),
+                  ),
+                  Expanded(child: _TimePickerField(time: _endTime, onTap: () => _pickTime(context, false))),
+                ],
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Save Changes'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 52,
+                child: OutlinedButton(
+                  onPressed: () {},
+                  child: const Text('Add Reminder'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TimePickerField extends StatelessWidget {
+  const _TimePickerField({required this.time, required this.onTap});
+  final TimeOfDay time;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.black26,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Center(
+          child: Text(
+            time.format(context),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DaySelector extends StatelessWidget {
+  const _DaySelector({required this.selectedDays, required this.onDaySelected});
+  final Set<String> selectedDays;
+  final ValueChanged<String> onDaySelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: days.map((day) {
+        final isSelected = selectedDays.contains(day);
+        return GestureDetector(
+          onTap: () => onDaySelected(day),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isSelected ? Theme.of(context).colorScheme.primary : Colors.black26,
+              border: Border.all(color: isSelected ? Colors.transparent : Colors.white12),
+            ),
+            child: Center(
+              child: Text(
+                day.substring(0, 1),
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ===== lib/features/dashboard/widgets/date_time_tab.dart =====
+
+// ===== lib/features/dashboard/widgets/date_time_tab.dart =====
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:AutoAir/api/api_service.dart';
+import 'package:AutoAir/providers/device_provider.dart';
+
+class DateTimeTab extends StatefulWidget {
+  const DateTimeTab({Key? key}) : super(key: key);
+
+  @override
+  State<DateTimeTab> createState() => _DateTimeTabState();
+}
+
+class _DateTimeTabState extends State<DateTimeTab> {
+  // State variables for dropdowns
+  String _selectedMonth = 'January';
+  String _selectedDay = '01';
+  String _selectedYear = '2019';
+  String _selectedHour = '01';
+  String _selectedMinute = '00';
+  String _selectedAmPm = 'AM';
+  bool _isLoading = false;
+
+  Future<void> _setManualTime() async {
+    if (!mounted || _isLoading) return;
+    setState(() => _isLoading = true);
+
+    final provider = Provider.of<DeviceProvider>(context, listen: false);
+    final device = provider.selectedDevice;
+
+    if (device == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No device selected.'), backgroundColor: Colors.red),
+        );
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+
+    try {
+      final month = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].indexOf(_selectedMonth) + 1;
+      final day = int.parse(_selectedDay);
+      final year = int.parse(_selectedYear);
+      int hour = int.parse(_selectedHour);
+      if (_selectedAmPm == 'PM' && hour != 12) hour += 12;
+      if (_selectedAmPm == 'AM' && hour == 12) hour = 0;
+      final minute = int.parse(_selectedMinute);
+
+      final selectedDateTime = DateTime(year, month, day, hour, minute);
+
+      final iso = selectedDateTime.toUtc().toIso8601String();
+      final String timezone = (await FlutterTimezone.getLocalTimezone()) as String;
+
+      await ApiService().updateDeviceTimeConfig(
+        deviceSerialNumber: device.serialNumber,
+        isoTime: iso,
+        timezone: timezone,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('System time configured successfully.'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error sending time: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildDateRow(),
+          const SizedBox(height: 24),
+          _buildTimeRow(),
+          const SizedBox(height: 48),
+          ElevatedButton(
+            onPressed: _isLoading ? null : _setManualTime,
+            child: _isLoading
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Set Time Manually'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: () {
+              DefaultTabController.of(context).animateTo(0);
+            },
+            child: const Text('Auto-sync with Internet Time'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateRow() {
+    return Row(
+      children: [
+        const Text('Date:', style: TextStyle(fontSize: 16)),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 4,
+          child: _buildDropdown(
+            value: _selectedMonth,
+            items: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+            onChanged: (val) => setState(() => _selectedMonth = val!),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: _buildDropdown(
+            value: _selectedDay,
+            items: List.generate(31, (i) => (i + 1).toString().padLeft(2, '0')),
+            onChanged: (val) => setState(() => _selectedDay = val!),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: _buildDropdown(
+            value: _selectedYear,
+            items: List.generate(10, (i) => (2019 + i).toString()),
+            onChanged: (val) => setState(() => _selectedYear = val!),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeRow() {
+    return Row(
+      children: [
+        const Text('Time:', style: TextStyle(fontSize: 16)),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _buildDropdown(
+            value: _selectedHour,
+            items: List.generate(12, (i) => (i + 1).toString().padLeft(2, '0')),
+            onChanged: (val) => setState(() => _selectedHour = val!),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4.0),
+          child: Text(':', style: TextStyle(fontSize: 16, color: Colors.white70)),
+        ),
+        Expanded(
+          child: _buildDropdown(
+            value: _selectedMinute,
+            items: List.generate(60, (i) => i.toString().padLeft(2, '0')),
+            onChanged: (val) => setState(() => _selectedMinute = val!),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildDropdown(
+            value: _selectedAmPm,
+            items: ['AM', 'PM'],
+            onChanged: (val) => setState(() => _selectedAmPm = val!),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade800.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+          dropdownColor: const Color(0xFF1C1C1E),
+          items: items.map((String item) {
+            return DropdownMenuItem<String>(
+              value: item,
+              child: Text(item, style: const TextStyle(fontSize: 14)),
+            );
+          }).toList(),
+          onChanged: onChanged,
         ),
       ),
     );
@@ -4339,6 +5115,318 @@ class _PrimaryButton extends StatelessWidget {
         child: Text(label),
       ),
     );
+  }
+}
+
+// ===== lib/features/dashboard/widgets/side_menu.dart =====
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:AutoAir/providers/device_provider.dart';
+import 'package:AutoAir/features/devices/models/device_model.dart';
+
+class SideMenu extends StatelessWidget {
+  const SideMenu({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final deviceProvider = Provider.of<DeviceProvider>(context);
+    final selectedDevice = deviceProvider.selectedDevice;
+    final otherDevices = deviceProvider.devices.where((d) => d != selectedDevice).toList();
+
+    return Material(
+      color: const Color(0xFF1C1C1E).withOpacity(0.95),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _UserInfo(
+                userName: 'User 1', // Placeholder
+                deviceName: selectedDevice?.name ?? 'No Device',
+              ),
+              const SizedBox(height: 24),
+              _MenuItem(
+                title: 'Visit profile',
+                onTap: () {},
+              ),
+              Theme(
+                data: theme.copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  key: UniqueKey(),
+                  initiallyExpanded: true,
+                  tilePadding: EdgeInsets.zero,
+                  title: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text('Change device', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  trailing: const Icon(Icons.expand_less, color: Colors.white),
+                  children: otherDevices.map((device) {
+                    return _MenuItem(
+                      title: device.name,
+                      onTap: () async {
+                        await deviceProvider.persistActiveDevice(device);
+                        // Optional: close menu after selection
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              _MenuItem(
+                title: 'Manage all devices',
+                onTap: () {
+                  Navigator.of(context).pushNamed('/device_list');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserInfo extends StatelessWidget {
+  const _UserInfo({required this.userName, required this.deviceName});
+  final String userName;
+  final String deviceName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.person, size: 28, color: Colors.white),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              userName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              deviceName,
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ],
+        )
+      ],
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({required this.title, required this.onTap});
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      title: Text(title, style: const TextStyle(fontSize: 16)),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+    );
+  }
+}
+
+// ===== lib/features/dashboard/widgets/wifi_setup_tab.dart =====
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
+import 'package:AutoAir/api/api_service.dart';
+import 'package:AutoAir/providers/device_provider.dart';
+
+class WifiSetupTab extends StatefulWidget {
+  const WifiSetupTab({Key? key}) : super(key: key);
+
+  @override
+  State<WifiSetupTab> createState() => _WifiSetupTabState();
+}
+
+class _WifiSetupTabState extends State<WifiSetupTab> {
+  final _formKey = GlobalKey<FormState>();
+  bool _useStaticIp = false;
+  bool _isPasswordObscured = true;
+  bool _isLoading = false;
+
+  final _ssidController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _ipAddressController = TextEditingController();
+  final _subnetController = TextEditingController();
+  final _gatewayController = TextEditingController();
+
+  @override
+  void dispose() {
+    _ssidController.dispose();
+    _passwordController.dispose();
+    _ipAddressController.dispose();
+    _subnetController.dispose();
+    _gatewayController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleConnect() async {
+    if (!(_formKey.currentState?.validate() ?? false) || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    final deviceProvider = Provider.of<DeviceProvider>(context, listen: false);
+    final device = deviceProvider.selectedDevice;
+
+    if (device == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No device is selected for configuration.'), backgroundColor: Colors.red),
+        );
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+
+    try {
+      await ApiService().updateDeviceWifiConfig(
+        deviceSerialNumber: device.serialNumber,
+        ssid: _ssidController.text,
+        password: _passwordController.text,
+        isStatic: _useStaticIp,
+        ipAddress: _ipAddressController.text,
+        subnet: _subnetController.text,
+        gateway: _gatewayController.text,
+      );
+      _onSuccess();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 503 && e.response?.data['message'].contains('Device unreachable')) {
+        _onSuccess();
+      } else {
+        String errorMessage = "An unknown error occurred.";
+        if (e.response?.data is Map && e.response?.data['message'] != null) {
+          errorMessage = e.response!.data['message'];
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send credentials: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _onSuccess() async {
+    final deviceProvider = Provider.of<DeviceProvider>(context, listen: false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Wi-Fi credentials sent successfully.'), backgroundColor: Colors.green),
+      );
+    }
+
+    await deviceProvider.fetchDevices();
+
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushReplacementNamed('/dashboard');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildTextField(_ssidController, 'Wi-Fi Name (SSID)', isRequired: true),
+            const SizedBox(height: 16),
+            _buildTextField(_passwordController, 'Password', isObscured: true, isRequired: true),
+            const SizedBox(height: 8),
+            _buildStaticIpCheckbox(),
+            if (_useStaticIp) ..._buildStaticIpFields(),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _handleConnect,
+              child: _isLoading
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Connect & Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, {bool isObscured = false, bool isRequired = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          obscureText: isObscured ? _isPasswordObscured : false,
+          decoration: InputDecoration(
+            suffixIcon: isObscured
+                ? IconButton(
+              icon: Icon(_isPasswordObscured ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _isPasswordObscured = !_isPasswordObscured),
+            )
+                : null,
+          ),
+          validator: (value) {
+            if (isRequired && (value == null || value.isEmpty)) {
+              return 'This field is required';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStaticIpCheckbox() {
+    return Row(
+      children: [
+        Checkbox(
+          value: _useStaticIp,
+          onChanged: (value) => setState(() => _useStaticIp = value ?? false),
+          side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black87),
+        ),
+        GestureDetector(
+          onTap: () => setState(() => _useStaticIp = !_useStaticIp),
+          child: Text('Use Static IP', style: Theme.of(context).textTheme.bodyMedium),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildStaticIpFields() {
+    return [
+      const SizedBox(height: 16),
+      _buildTextField(_ipAddressController, 'IP Address', isRequired: _useStaticIp),
+      const SizedBox(height: 16),
+      _buildTextField(_subnetController, 'Subnet Mask', isRequired: _useStaticIp),
+      const SizedBox(height: 16),
+      _buildTextField(_gatewayController, 'Gateway', isRequired: _useStaticIp),
+    ];
   }
 }
 

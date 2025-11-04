@@ -1,3 +1,5 @@
+// ===== lib/api/api_service.dart =====
+
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -150,6 +152,45 @@ class ApiService {
       return response.statusCode == 200;
     } on DioException {
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> getUser() async {
+    try {
+      final response = await _dio.get('auth/mobile/user');
+      return Map<String, dynamic>.from(response.data['data'] ?? response.data);
+    } on DioException {
+      throw Exception('Failed to fetch user profile.');
+    }
+  }
+
+  Future<void> updateUserProfile(Map<String, dynamic> data) async {
+    try {
+      await _dio.put('auth/mobile/user/profile', data: data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 422) {
+        throw Exception('Invalid data provided.');
+      }
+      throw Exception('Failed to update profile.');
+    }
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    try {
+      await _dio.put('auth/mobile/user/password', data: {
+        'current_password': currentPassword,
+        'password': newPassword,
+        'password_confirmation': newPasswordConfirmation,
+      });
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 422) {
+        throw Exception('Invalid password data.');
+      }
+      throw Exception('Failed to change password.');
     }
   }
 

@@ -8,6 +8,9 @@ import 'features/authentication/screens/forgot_password_screen.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
 import 'features/devices/screens/add_device_screen.dart';
 import 'features/devices/screens/device_list_screen.dart';
+import 'features/profile/screens/profile_screen.dart';
+import 'features/profile/screens/edit_profile_screen.dart';
+import 'features/profile/screens/change_password_screen.dart';
 import 'features/setup/screens/system_time_screen.dart';
 import 'features/setup/screens/wifi_onboarding_screen.dart';
 import 'features/setup/screens/wifi_scan_screen.dart';
@@ -18,6 +21,7 @@ import 'features/dashboard/screens/firmware_update_screen.dart';
 import 'features/dashboard/screens/configuration_screen.dart';
 import 'providers/dashboard_provider.dart';
 import 'providers/device_provider.dart';
+import 'providers/profile_provider.dart';
 import 'themes.dart';
 import 'auth_gate.dart';
 import 'navigation_service.dart';
@@ -27,6 +31,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => DeviceProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
         ChangeNotifierProxyProvider<DeviceProvider, DashboardProvider>(
           create: (context) => DashboardProvider(
             Provider.of<DeviceProvider>(context, listen: false),
@@ -60,6 +65,9 @@ class MyApp extends StatelessWidget {
         '/dashboard': (context) => const DashboardScreen(),
         '/device_list': (context) => const DeviceListScreen(),
         '/add_device': (context) => const AddDeviceScreen(),
+        '/profile': (context) => const ProfileScreen(),
+        '/edit_profile': (context) => const EditProfileScreen(),
+        '/change_password': (context) => const ChangePasswordScreen(),
         '/system_time': (context) => const SystemTimeScreen(),
         '/wifi_onboarding': (context) => const WifiOnboardingScreen(),
         '/wifi_scan': (context) => const WifiScanScreen(),
