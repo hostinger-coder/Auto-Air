@@ -1,3 +1,5 @@
+// ===== lib/features/authentication/screens/login_screen.dart =====
+
 import 'package:flutter/material.dart';
 import 'package:AutoAir/api/api_service.dart';
 import 'package:AutoAir/utils/app_assets.dart';
@@ -40,11 +42,11 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil('/device_list', (route) => false);
-    } catch (e) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/auth_gate', (route) => false);
+    } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) {

@@ -1,5 +1,8 @@
+// ===== lib/features/devices/screens/add_device_screen.dart =====
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:AutoAir/api/api_service.dart';
 import 'package:AutoAir/providers/device_provider.dart';
 import 'package:AutoAir/utils/app_assets.dart';
 import 'package:AutoAir/widgets/app_background.dart';
@@ -32,7 +35,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   Future<void> _saveDevice() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isLoading = true);
+
     final deviceProvider = Provider.of<DeviceProvider>(context, listen: false);
+
     try {
       await deviceProvider.addDevice(
         name: _nameController.text,
@@ -46,10 +51,10 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
         );
       }
     } finally {

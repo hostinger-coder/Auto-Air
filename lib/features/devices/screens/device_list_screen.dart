@@ -1,3 +1,5 @@
+// ===== lib/features/devices/screens/device_list_screen.dart =====
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:AutoAir/providers/device_provider.dart';
@@ -137,11 +139,22 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         if (provider.error != null && provider.devices.isEmpty) {
           return Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 48.0),
-              child: Text(
-                'Error loading devices. Pull to refresh.',
-                style: TextStyle(color: Colors.grey.shade400),
-              ),
+                padding: const EdgeInsets.symmetric(vertical: 48.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      provider.error!,
+                      style: TextStyle(color: Colors.red.shade300),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Pull to refresh.',
+                      style: TextStyle(color: Colors.grey.shade400),
+                    )
+                  ],
+                )
             ),
           );
         }

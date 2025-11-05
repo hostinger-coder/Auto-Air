@@ -1,4 +1,4 @@
-// lib/features/profile/screens/edit_profile_screen.dart
+// ===== lib/features/profile/screens/edit_profile_screen.dart =====
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -154,7 +154,7 @@ class _InfoField extends StatelessWidget {
         style: TextStyle(color: enabled ? Colors.white : Colors.white60),
         decoration: _buildInputDecoration(context, label, icon),
         validator: (value) {
-          if (value == null || value.trim().isEmpty) {
+          if (label != 'Contact Number' && (value == null || value.trim().isEmpty)) {
             return '$label cannot be empty';
           }
           return null;

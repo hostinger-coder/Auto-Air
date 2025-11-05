@@ -1,4 +1,5 @@
-import 'package:dio/dio.dart';
+// ===== lib/providers/device_provider.dart =====
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:AutoAir/api/api_service.dart';
@@ -34,20 +35,27 @@ class DeviceProvider with ChangeNotifier {
   Future<void> clearActiveDevice() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_activeDeviceKey);
+    _selectedDevice = null;
+    notifyListeners();
   }
 
   Future<bool> loadInitialDevice() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final serial = prefs.getString(_activeDeviceKey);
-      if (serial == null || serial.isEmpty) return false;
-
+      if (serial == null || serial.isEmpty) {
+        return false;
+      }
       await fetchDevices();
-      final activeDevice = _devices.firstWhere((d) => d.serialNumber == serial);
+
+      final activeDevice = _devices.firstWhere(
+            (d) => d.serialNumber == serial,
+        orElse: () => throw Exception('Device not found'),
+      );
       _selectedDevice = activeDevice;
       notifyListeners();
       return true;
-    } catch (e) {
+    } catch (_) {
       await clearActiveDevice();
       return false;
     }
@@ -61,8 +69,8 @@ class DeviceProvider with ChangeNotifier {
     try {
       final deviceData = await _apiService.getDevices();
       _devices = deviceData.map((data) => Device.fromJson(data)).toList();
-    } catch (e) {
-      _error = e.toString();
+    } on ApiException catch (e) {
+      _error = e.message;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -76,6 +84,7 @@ class DeviceProvider with ChangeNotifier {
     String? description,
   }) async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
     try {
@@ -86,23 +95,12 @@ class DeviceProvider with ChangeNotifier {
         description: description,
       );
       await fetchDevices();
-    } on DioException catch (e) {
-      String errorMessage = "Failed to add device. Please try again.";
-      if (e.response?.data is Map && e.response!.data['message'] != null) {
-        String serverMessage = e.response!.data['message'];
-        if (serverMessage.contains('COMFAC service')) {
-          errorMessage = "An unexpected server error occurred. Please try again later.";
-        } else {
-          errorMessage = serverMessage;
-        }
-      }
-      _error = errorMessage;
-      notifyListeners();
-      throw Exception(errorMessage);
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
+    } on ApiException catch (e) {
+      _error = e.message;
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 }

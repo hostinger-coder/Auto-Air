@@ -1,4 +1,4 @@
-// lib/features/profile/screens/change_password_screen.dart
+// ===== lib/features/profile/screens/change_password_screen.dart =====
 
 import 'dart:ui';
 import 'package:flutter/material.dart';

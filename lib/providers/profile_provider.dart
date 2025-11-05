@@ -1,4 +1,4 @@
-// lib/providers/profile_provider.dart
+// ===== lib/providers/profile_provider.dart =====
 
 import 'package:flutter/material.dart';
 import 'package:AutoAir/api/api_service.dart';
@@ -15,8 +15,9 @@ class ProfileProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  ProfileProvider() {
-    fetchUser();
+  void setUser(User user) {
+    _user = user;
+    notifyListeners();
   }
 
   Future<void> fetchUser() async {
@@ -25,10 +26,14 @@ class ProfileProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final userData = await _apiService.getUser();
-      _user = User.fromJson(userData);
-    } catch (e) {
-      _error = e.toString();
+      final userData = await _apiService.authenticate();
+      if (userData != null) {
+        _user = userData;
+      } else {
+        _error = "Could not retrieve user data.";
+      }
+    } on ApiException catch (e) {
+      _error = e.message;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -36,19 +41,26 @@ class ProfileProvider with ChangeNotifier {
   }
 
   Future<bool> updateUserProfile(Map<String, dynamic> data) async {
+    if (_user == null) {
+      _error = "User not found. Cannot update profile.";
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _apiService.updateUserProfile(data);
-      await fetchUser();
+      final updatedUser = await _apiService.updateUserProfile(userId: _user!.id, data: data);
+      _user = updatedUser;
       return true;
-    } catch (e) {
-      _error = e.toString();
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
@@ -57,24 +69,30 @@ class ProfileProvider with ChangeNotifier {
     required String newPassword,
     required String newPasswordConfirmation,
   }) async {
+    if (_user == null) {
+      _error = "User not found. Cannot change password.";
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       await _apiService.changePassword(
+        userId: _user!.id,
         currentPassword: currentPassword,
         newPassword: newPassword,
         newPasswordConfirmation: newPasswordConfirmation,
       );
-      _isLoading = false;
-      notifyListeners();
       return true;
-    } catch (e) {
-      _error = e.toString();
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 }

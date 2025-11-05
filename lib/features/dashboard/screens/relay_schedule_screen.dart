@@ -1,11 +1,17 @@
 // ===== lib/features/dashboard/screens/relay_schedule_screen.dart =====
 
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import 'package:AutoAir/api/api_service.dart';
+import 'package:AutoAir/providers/device_provider.dart';
 import 'package:AutoAir/features/dashboard/models/relay_model.dart';
 import 'package:AutoAir/features/dashboard/models/schedule_model.dart';
+import 'package:AutoAir/features/devices/models/device_model.dart';
 import 'package:AutoAir/widgets/app_background.dart';
 
 class RelayScheduleScreen extends StatefulWidget {
@@ -16,33 +22,100 @@ class RelayScheduleScreen extends StatefulWidget {
 }
 
 class _RelayScheduleScreenState extends State<RelayScheduleScreen> {
-  late List<RelaySchedule> _schedules;
+  final ApiService _apiService = ApiService();
+  List<RelaySchedule> _schedules = [];
+  bool _isLoading = true;
+  String? _error;
   int _filterIndex = 0;
 
+  late Relay _relay;
+  late Device _device;
+
   @override
-  void initState() {
-    super.initState();
-    _schedules = List.generate(
-      10,
-          (index) => RelaySchedule(
-        id: index + 1,
-        title: 'Schedule ${index + 1}',
-        timeRange: '12:00 AM — 12:00 AM',
-        days: 'Mon • Tue • Wed • Thu • Fri',
-        isActive: index.isEven,
-      ),
-    );
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _relay = ModalRoute.of(context)!.settings.arguments as Relay;
+    final deviceProvider = Provider.of<DeviceProvider>(context, listen: false);
+    _device = deviceProvider.selectedDevice!;
+    _fetchSchedules();
   }
 
-  List<RelaySchedule> get _visible {
+  Future<void> _fetchSchedules() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final schedules = await _apiService.getSchedules(
+        deviceSerialNumber: _device.serialNumber,
+        relayId: _relay.id.toString(),
+      );
+      if (mounted) {
+        setState(() {
+          _schedules = schedules;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<RelaySchedule> get _visibleSchedules {
     if (_filterIndex == 1) return _schedules.where((s) => s.isActive).toList();
     if (_filterIndex == 2) return _schedules.where((s) => !s.isActive).toList();
     return _schedules;
   }
 
+  Future<void> _toggleSchedule(RelaySchedule schedule) async {
+    final originalState = schedule.isActive;
+    setState(() => schedule.isActive = !originalState);
+
+    try {
+      await _apiService.updateSchedule(
+        deviceSerialNumber: _device.serialNumber,
+        relayId: _relay.id.toString(),
+        scheduleId: schedule.id,
+        data: {'is_active': schedule.isActive},
+      );
+    } on ApiException catch (e) {
+      setState(() => schedule.isActive = originalState);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteSchedule(RelaySchedule schedule) async {
+    try {
+      await _apiService.deleteSchedule(
+        deviceSerialNumber: _device.serialNumber,
+        relayId: _relay.id.toString(),
+        scheduleId: schedule.id,
+      );
+      _fetchSchedules();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final relay = ModalRoute.of(context)!.settings.arguments as Relay;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -77,43 +150,69 @@ class _RelayScheduleScreenState extends State<RelayScheduleScreen> {
           label: const Text('Add Schedule'),
           icon: const Icon(Icons.add),
         ),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-          children: [
-            _HeaderCard(relayName: relay.name, onAdd: () => _openEditor(context)),
-            const SizedBox(height: 16),
-            _FilterChips(
-              index: _filterIndex,
-              onChanged: (i) => setState(() => _filterIndex = i),
-            ),
-            const SizedBox(height: 8),
-            if (_visible.isEmpty)
-              _EmptyState(onAdd: () => _openEditor(context))
-            else
-              ..._visible.map((s) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _ScheduleCard(
-                  schedule: s,
-                  onToggle: (v) => setState(() => s.isActive = v),
-                  onEdit: () => _openEditor(context, s),
-                  onMore: () => _showItemMenu(context, s),
-                ),
-              )),
-          ],
+        body: RefreshIndicator(
+          onRefresh: _fetchSchedules,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            children: [
+              _HeaderCard(relayName: _relay.name, onAdd: () => _openEditor(context)),
+              const SizedBox(height: 16),
+              _FilterChips(
+                index: _filterIndex,
+                onChanged: (i) => setState(() => _filterIndex = i),
+              ),
+              const SizedBox(height: 8),
+              _buildBody(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _openEditor(BuildContext context, [RelaySchedule? schedule]) {
-    showModalBottomSheet(
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator()));
+    }
+
+    if (_error != null) {
+      return Center(child: Padding(padding: const EdgeInsets.all(32.0), child: Text(_error!, style: const TextStyle(color: Colors.red))));
+    }
+
+    if (_visibleSchedules.isEmpty) {
+      return _EmptyState(onAdd: () => _openEditor(context));
+    }
+
+    return Column(
+      children: _visibleSchedules.map((s) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _ScheduleCard(
+          schedule: s,
+          onToggle: (v) => _toggleSchedule(s),
+          onEdit: () => _openEditor(context, s),
+          onMore: () => _showItemMenu(context, s),
+        ),
+      )).toList(),
+    );
+  }
+
+  void _openEditor(BuildContext context, [RelaySchedule? schedule]) async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) {
-        return _ScheduleEditor(schedule: schedule);
+        return _ScheduleEditor(
+          relay: _relay,
+          device: _device,
+          schedule: schedule,
+        );
       },
     );
+
+    if (result == true) {
+      _fetchSchedules();
+    }
   }
 
   void _showItemMenu(BuildContext context, RelaySchedule s) async {
@@ -123,22 +222,11 @@ class _RelayScheduleScreenState extends State<RelayScheduleScreen> {
       color: const Color(0xFF2A2A2C),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       items: const [
-        PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
         PopupMenuItem(value: 'delete', child: Text('Delete')),
       ],
     );
-    if (selected == 'duplicate') {
-      setState(() {
-        _schedules.add(RelaySchedule(
-          id: _schedules.length + 1,
-          title: '${s.title} (copy)',
-          timeRange: s.timeRange,
-          days: s.days,
-          isActive: s.isActive,
-        ));
-      });
-    } else if (selected == 'delete') {
-      setState(() => _schedules.removeWhere((x) => x.id == s.id));
+    if (selected == 'delete') {
+      _deleteSchedule(s);
     }
   }
 
@@ -462,43 +550,107 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _ScheduleEditor extends StatefulWidget {
-  const _ScheduleEditor({this.schedule});
+  const _ScheduleEditor({this.schedule, required this.relay, required this.device});
   final RelaySchedule? schedule;
+  final Relay relay;
+  final Device device;
 
   @override
   State<_ScheduleEditor> createState() => _ScheduleEditorState();
 }
 
 class _ScheduleEditorState extends State<_ScheduleEditor> {
-  late TextEditingController _titleController;
-  int _scheduleTypeIndex = 0; // 0 for Recurring, 1 for One-Time
-  TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 18, minute: 0);
-  final Set<String> _selectedDays = {'Mon', 'Wed', 'Fri'};
+  final ApiService _apiService = ApiService();
+  final _formKey = GlobalKey<FormState>();
+
+  late DateTime _startTime;
+  late DateTime _endTime;
+  late Set<String> _selectedDays;
+  bool _isLoading = false;
+
+  final Map<String, String> _dayMapping = {
+    'Mon': 'monday', 'Tue': 'tuesday', 'Wed': 'wednesday',
+    'Thu': 'thursday', 'Fri': 'friday', 'Sat': 'saturday', 'Sun': 'sunday',
+  };
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.schedule?.title ?? 'New Schedule');
+    final s = widget.schedule;
+    if (s != null) {
+      _startTime = s.startTime;
+      _endTime = s.endTime;
+      _selectedDays = s.daysOfWeek.map((d) => _dayMapping.entries.firstWhere((e) => e.value == d.toLowerCase(), orElse: () => const MapEntry('', '')).key).toSet();
+      _selectedDays.remove('');
+    } else {
+      final now = DateTime.now();
+      _startTime = DateTime(now.year, now.month, now.day, 8, 0);
+      _endTime = DateTime(now.year, now.month, now.day, 18, 0);
+      _selectedDays = {'Mon', 'Tue', 'Wed', 'Thu', 'Fri'};
+    }
   }
 
-  @override
-  void dispose() {
-    _titleController.dispose();
-    super.dispose();
-  }
+  Future<void> _pickTime(BuildContext context, bool isStart) async {
+    final initial = isStart ? _startTime : _endTime;
+    final newTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
 
-  Future<void> _pickTime(BuildContext context, bool isStartTime) async {
-    final initialTime = isStartTime ? _startTime : _endTime;
-    final newTime = await showTimePicker(context: context, initialTime: initialTime);
     if (newTime != null) {
       setState(() {
-        if (isStartTime) {
-          _startTime = newTime;
+        final newDateTime = DateTime(initial.year, initial.month, initial.day, newTime.hour, newTime.minute);
+        if (isStart) {
+          _startTime = newDateTime;
         } else {
-          _endTime = newTime;
+          _endTime = newDateTime;
         }
       });
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    if(!(_formKey.currentState?.validate() ?? false)) return;
+    if (_selectedDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one day.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final payload = {
+      'is_active': widget.schedule?.isActive ?? true,
+      'start_time': _startTime.toUtc().toIso8601String(),
+      'end_time': _endTime.toUtc().toIso8601String(),
+      'days_of_week': _selectedDays.map((day) => _dayMapping[day]).toList(),
+    };
+
+    try {
+      if (widget.schedule == null) {
+        await _apiService.createSchedule(
+          deviceSerialNumber: widget.device.serialNumber,
+          relayId: widget.relay.id.toString(),
+          data: payload,
+        );
+      } else {
+        await _apiService.updateSchedule(
+          deviceSerialNumber: widget.device.serialNumber,
+          relayId: widget.relay.id.toString(),
+          scheduleId: widget.schedule!.id,
+          data: payload,
+        );
+      }
+      if(mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if(mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -527,50 +679,30 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
           color: const Color(0xFF1C1C1E).withOpacity(0.85),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(4),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Center(
-                child: Text(
-                  widget.schedule == null ? 'New Schedule' : 'Edit Schedule',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                const SizedBox(height: 16),
+                Center(
+                  child: Text(
+                    widget.schedule == null ? 'New Schedule' : 'Edit Schedule',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _buildSectionHeader('Title'),
-              TextField(
-                controller: _titleController,
-                decoration: InputDecoration(hintText: 'e.g., Weekday Operation'),
-              ),
-              _buildSectionHeader('Type'),
-              SizedBox(
-                width: double.infinity,
-                child: CupertinoSlidingSegmentedControl<int>(
-                  groupValue: _scheduleTypeIndex,
-                  backgroundColor: Colors.black26,
-                  thumbColor: Theme.of(context).colorScheme.primary,
-                  padding: const EdgeInsets.all(4),
-                  children: const {
-                    0: Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Recurring')),
-                    1: Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('One-Time')),
-                  },
-                  onValueChanged: (value) => setState(() => _scheduleTypeIndex = value ?? 0),
-                ),
-              ),
-              if (_scheduleTypeIndex == 0) ...[
                 _buildSectionHeader('Days'),
                 _DaySelector(
                   selectedDays: _selectedDays,
@@ -584,35 +716,37 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
                     });
                   },
                 ),
-              ],
-              _buildSectionHeader('Time Range'),
-              Row(
-                children: [
-                  Expanded(child: _TimePickerField(time: _startTime, onTap: () => _pickTime(context, true))),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text('to', style: TextStyle(color: Colors.white70)),
+                _buildSectionHeader('Time Range'),
+                Row(
+                  children: [
+                    Expanded(child: _TimePickerField(time: TimeOfDay.fromDateTime(_startTime), onTap: () => _pickTime(context, true))),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text('to', style: TextStyle(color: Colors.white70)),
+                    ),
+                    Expanded(child: _TimePickerField(time: TimeOfDay.fromDateTime(_endTime), onTap: () => _pickTime(context, false))),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _saveChanges,
+                    child: _isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Save Changes'),
                   ),
-                  Expanded(child: _TimePickerField(time: _endTime, onTap: () => _pickTime(context, false))),
-                ],
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Save Changes'),
                 ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: () {},
-                  child: const Text('Add Reminder'),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 52,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
